@@ -11,11 +11,21 @@ import {
   GetUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { cognitoConfig } from '@/lib/auth/cognito-config';
+import { getOrCreateUser } from '@/lib/db/user-service';
 
-// Initialize Cognito client
-const cognitoClient = new CognitoIdentityProviderClient({
-  region: cognitoConfig.region,
-});
+// Lazy-load Cognito client to avoid build-time errors
+let _cognitoClient: CognitoIdentityProviderClient | null = null;
+
+function getCognitoClient(): CognitoIdentityProviderClient {
+  if (!_cognitoClient) {
+    const region = cognitoConfig.region;
+    if (!region) {
+      throw new Error('NEXT_PUBLIC_AWS_REGION environment variable is required');
+    }
+    _cognitoClient = new CognitoIdentityProviderClient({ region });
+  }
+  return _cognitoClient;
+}
 
 interface ActionResult {
   success: boolean;
@@ -54,6 +64,7 @@ export async function signUpAction(
   }
 
   try {
+    const cognitoClient = getCognitoClient();
     const command = new SignUpCommand({
       ClientId: cognitoConfig.clientId,
       Username: email,
@@ -118,6 +129,7 @@ export async function signInAction(
   }
 
   try {
+    const cognitoClient = getCognitoClient();
     const command = new InitiateAuthCommand({
       AuthFlow: 'USER_PASSWORD_AUTH',
       ClientId: cognitoConfig.clientId,
@@ -143,6 +155,13 @@ export async function signInAction(
       const tokenParts = IdToken.split('.');
       const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
 
+      // Get or create user in DynamoDB
+      await getOrCreateUser({
+        userId: payload.sub,
+        email: payload.email,
+        name: payload.name,
+      });
+
       // Set session cookie
       await setSessionCookie({
         userId: payload.sub,
@@ -151,7 +170,7 @@ export async function signInAction(
       });
     }
 
-    redirect('/dashboard');
+    redirect('/app');
   } catch (error: any) {
     if (error.name === 'NEXT_REDIRECT') {
       throw error;
@@ -193,6 +212,7 @@ export async function forgotPasswordAction(
   }
 
   try {
+    const cognitoClient = getCognitoClient();
     const command = new ForgotPasswordCommand({
       ClientId: cognitoConfig.clientId,
       Username: email,
@@ -247,6 +267,7 @@ export async function confirmPasswordAction(
   }
 
   try {
+    const cognitoClient = getCognitoClient();
     const command = new ConfirmForgotPasswordCommand({
       ClientId: cognitoConfig.clientId,
       Username: email,
