@@ -3,9 +3,9 @@ import type { NextRequest } from 'next/server';
 import { verifySession } from '@/lib/auth/session';
 
 // Define protected routes that require authentication
-const protectedRoutes = ['/dashboard'];
+const protectedRoutes = ['/dashboard', '/app'];
 
-// Define auth routes that should redirect to dashboard if already authenticated
+// Define auth routes that should redirect to app if already authenticated
 const authRoutes = ['/auth/signin', '/auth/signup'];
 
 export async function middleware(request: NextRequest) {
@@ -26,9 +26,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Redirect to dashboard if accessing auth routes with valid session
+  // Redirect to app if accessing auth routes with valid session
   if (isAuthRoute && session) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/app', request.url));
   }
 
   return NextResponse.next();
